@@ -27,10 +27,11 @@ from torch.utils.data.sampler import SubsetRandomSampler
 from torchvision.datasets import MNIST
 import numpy as np
 
+
 labels_per_class = 10
 n_labels = 10
 
-root = '../data'
+root = '~/data'
 transform = transforms.Compose([transforms.ToTensor(),
                                 transforms.Lambda(lambd=lambda x: x.view(-1))])
 
@@ -57,12 +58,15 @@ labelled = torch.utils.data.DataLoader(mnist_train, batch_size=batch_size,
 
 from torch.utils.data.sampler import WeightedRandomSampler
 weight = [100,1,1,1,1,10,30,4,5,3]
+weight = [1,1,1,1,1,1,1,1,1,1]
+
 y_train = mnist_train.targets.numpy()
 class_sample_count = np.array([len(np.where(y_train==t)[0]) for t in np.unique(y_train)])
 samples_weight = torch.from_numpy(np.array([weight[t] for t in y_train]))
 sampler = WeightedRandomSampler(samples_weight.type('torch.DoubleTensor'), len(samples_weight))
 unlabelled = torch.utils.data.DataLoader(mnist_train, sampler=sampler, batch_size=batch_size)
-
+unlabelled = torch.utils.data.DataLoader(mnist_train, batch_size=batch_size,
+                                         sampler=get_sampler(mnist_train.targets.numpy()), **kwargs)
 validation = torch.utils.data.DataLoader(mnist_valid, batch_size=batch_size,
                                          sampler=get_sampler(mnist_valid.targets.numpy()), **kwargs)
 
@@ -101,6 +105,7 @@ class Classifier(RelaxedCategorical):
         h = F.relu(self.fc1(x))
         h = F.softmax(self.fc2(h), dim=1)
         return {"probs": h}
+
 # prior model p(z|y)
 class Prior(Normal):
     def __init__(self):
@@ -108,7 +113,7 @@ class Prior(Normal):
 
         self.fc11 = nn.Linear(y_dim, z_dim)
         self.fc12 = nn.Linear(y_dim, z_dim)
-
+    
     def forward(self, y):
         return {"loc": self.fc11(y), "scale": F.softplus(self.fc12(y))}
    
@@ -131,13 +136,13 @@ f = Classifier().to(device)
 prior = Prior().to(device)
 p_joint = p * prior
 
+print(p_joint)
 
 # distributions for unsupervised learning
 _q_u = q.replace_var(x="x_u", y="y_u")
 p_u = p.replace_var(x="x_u")
 f_u = f.replace_var(x="x_u", y="y_u")
 prior_u = prior.replace_var(y="y_u")
-
 q_u = _q_u * f_u
 p_joint_u = p_u * prior_u
 
@@ -146,10 +151,10 @@ q_u.to(device)
 f_u.to(device)
 
 print(p_joint_u)
-print_latex(p_joint_u)
 
-elbo_u = ELBO(p_joint_u, q_u)
-elbo = ELBO(p_joint, q)
+elbo = ELBO(p_joint_u, q_u)
+
+elbo_u = ELBO(p_joint, q)
 nll = -f.log_prob() # or -LogProb(f)
 
 rate = 1 * (len(unlabelled) + len(labelled)) / len(labelled)

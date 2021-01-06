@@ -57,12 +57,13 @@ labelled = torch.utils.data.DataLoader(mnist_train, batch_size=batch_size,
 
 from torch.utils.data.sampler import WeightedRandomSampler
 weight = [100,1,1,1,1,10,30,4,5,3]
+weight = [1,1,1,1,1,1,1,1,1,1]
 y_train = mnist_train.targets.numpy()
-class_sample_count = np.array([len(np.where(y_train==t)[0]) for t in np.unique(y_train)])
 samples_weight = torch.from_numpy(np.array([weight[t] for t in y_train]))
 sampler = WeightedRandomSampler(samples_weight.type('torch.DoubleTensor'), len(samples_weight))
 unlabelled = torch.utils.data.DataLoader(mnist_train, sampler=sampler, batch_size=batch_size)
-
+#unlabelled = torch.utils.data.DataLoader(mnist_train, batch_size=batch_size,
+ #                                        sampler=get_sampler(mnist_train.targets.numpy()), **kwargs)
 validation = torch.utils.data.DataLoader(mnist_valid, batch_size=batch_size,
                                          sampler=get_sampler(mnist_valid.targets.numpy()), **kwargs)
 
