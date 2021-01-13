@@ -20,7 +20,7 @@ Latent variables(dimension 0 and 1) and reconstructed images.
 #### GMVAE
 ![gmvae_imbalanced_metrics](results/gmvae_imbalanced_mnist/gmvae_metrics.png)  
 Latent variables(dimension 0 and 1) and reconstructed images. You can see that each label seems to have its own distribution.  
-<img src="results/gmvae_imbalanced_mnist/gmvae_latent.png" width="200" height="200">   
+<img src="results/gmvae_imbalanced_mnist/gmvae_latent.png" width="200" height="200">
 <img src="results/gmvae_imbalanced_mnist/gmvae_recon.png" width="200" height="200"> 
 
 
