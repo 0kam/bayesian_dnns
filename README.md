@@ -1,9 +1,9 @@
 # bayesian_dnns
 Practice &amp; experiment of bayesian deep neural networks, mainly using pixyz
 ## GMVAE  
-A [pixyz](https://github.com/masa-su/pixyz) inplementation of Gaussian Mixtured Variational Auto Encoder proposed by [Rui Sue](http://ruishu.io/2016/12/25/gmvae/).  
+A [pixyz](https://github.com/masa-su/pixyz) implementation of Gaussian Mixtured Variational Auto Encoder proposed by [Rui Sue](http://ruishu.io/2016/12/25/gmvae/).  
 By using gaussian-mixtured prior for the generative model, its robustness for imbalanced data is much higher than Kingma's m2 model.  
-I also refered to the [pytorch imprementation by jariasf](https://github.com/jariasf/GMVAE/tree/master/pytorch)
+I also refered to the [pytorch implementation by jariasf](https://github.com/jariasf/GMVAE/tree/master/pytorch)
 
 ### Example: Imbalanced MNIST
 - Data  
