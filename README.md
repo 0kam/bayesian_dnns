@@ -7,11 +7,11 @@ I also refered to the [pytorch implementation by jariasf](https://github.com/jar
 
 ### Example: Imbalanced MNIST
 #### Data  
-- **labelled** 
+- **labelled**  
 [label:number of images] [0:1000, 1:10, 2:10, 3:10, 4:10, 5:100, 6:70, 7:40, 8:50, 9:30]  
-- **unlabelled** 
+- **unlabelled**   
 Total 50000 images. Sampling ratio of each labels are same as labelled data (imbalanced).  
-- **validation** 
+- **validation**  
 Total 10000 images. Sampling ratio of each labels are equal (balanced)  
 
 #### Result
