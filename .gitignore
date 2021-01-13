@@ -1,0 +1,4 @@
+# ignore tensorboardX result
+runs/
+# ignore MNIST data directory
+data/
