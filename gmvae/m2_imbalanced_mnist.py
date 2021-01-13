@@ -1,3 +1,6 @@
+# Kingma's M2 model for imbalanced MNIST dataset
+# based on https://github.com/masa-su/pixyz/blob/master/examples/m2.ipynb
+
 from __future__ import print_function
 import torch
 import torch.utils.data
@@ -8,8 +11,8 @@ from tensorboardX import SummaryWriter
 
 from tqdm import tqdm
 
-batch_size = 128
-epochs = 10
+batch_size = 512
+epochs = 50
 seed = 1
 torch.manual_seed(seed)
 
@@ -28,7 +31,10 @@ from torchvision.datasets import MNIST
 import numpy as np
 
 
-labels_per_class = 10
+# sampler weights for each labels(0 to 9)
+weight = [100,1,1,1,1,10,7,4,5,3]
+# for each labels, sample weight*10 images as labelled train data
+labels_per_class = [i * 10 for i in weight]
 n_labels = 10
 
 root = '~/data'
@@ -44,11 +50,20 @@ def get_sampler(labels, n=None):
     (indices,) = np.where(reduce(__or__, [labels == i for i in np.arange(n_labels)]))
     # Ensure uniform distribution of labels
     np.random.shuffle(indices)
-    indices = np.hstack([list(filter(lambda idx: labels[idx] == i, indices))[:n] for i in range(n_labels)])
+    indices = np.hstack([list(filter(lambda idx: labels[idx] == i, indices))[:n[i]] for i in range(n_labels)])
     indices = torch.from_numpy(indices)
     sampler = SubsetRandomSampler(indices)
     return sampler
 
+def get_sampler_val(labels, n=None):
+    # Only choose digits in n_labels
+    (indices,) = np.where(reduce(__or__, [labels == i for i in np.arange(n_labels)]))
+    # Ensure uniform distribution of labels
+    np.random.shuffle(indices)
+    indices = np.hstack([list(filter(lambda idx: labels[idx] == i, indices))[:n] for i in range(n_labels)])
+    indices = torch.from_numpy(indices)
+    sampler = SubsetRandomSampler(indices)
+    return sampler
 
 # Dataloaders for MNIST
 kwargs = {'num_workers': 1, 'pin_memory': True}
@@ -57,29 +72,23 @@ labelled = torch.utils.data.DataLoader(mnist_train, batch_size=batch_size,
                                        **kwargs)
 
 from torch.utils.data.sampler import WeightedRandomSampler
-weight = [100,1,1,1,1,10,30,4,5,3]
-weight = [1,1,1,1,1,1,1,1,1,1]
 
 y_train = mnist_train.targets.numpy()
 class_sample_count = np.array([len(np.where(y_train==t)[0]) for t in np.unique(y_train)])
 samples_weight = torch.from_numpy(np.array([weight[t] for t in y_train]))
 sampler = WeightedRandomSampler(samples_weight.type('torch.DoubleTensor'), len(samples_weight))
 unlabelled = torch.utils.data.DataLoader(mnist_train, sampler=sampler, batch_size=batch_size)
-unlabelled = torch.utils.data.DataLoader(mnist_train, batch_size=batch_size,
-                                         sampler=get_sampler(mnist_train.targets.numpy()), **kwargs)
-validation = torch.utils.data.DataLoader(mnist_valid, batch_size=batch_size,
-                                         sampler=get_sampler(mnist_valid.targets.numpy()), **kwargs)
+validation = torch.utils.data.DataLoader(mnist_valid, sampler=get_sampler_val(mnist_valid.targets.numpy()),
+                                           batch_size=batch_size, **kwargs)
 
 from pixyz.distributions import Normal, Bernoulli, RelaxedCategorical, Categorical
 from pixyz.models import Model
 from pixyz.losses import ELBO
 from pixyz.utils import print_latex
 
-
 x_dim = 784
 y_dim = 10
 z_dim = 64
-
 
 # inference model q(z|x,y)
 class Inference(Normal):
@@ -94,7 +103,21 @@ class Inference(Normal):
         h = F.relu(self.fc1(torch.cat([x, y], 1)))
         return {"loc": self.fc21(h), "scale": F.softplus(self.fc22(h))}
 
-# classifier q(y|x)
+    
+# generative model p(x|z,y)    
+class Generator(Bernoulli):
+    def __init__(self):
+        super().__init__(var=["x"], cond_var=["z","y"], name="p")
+
+        self.fc1 = nn.Linear(z_dim+y_dim, 512)
+        self.fc2 = nn.Linear(512, x_dim)
+
+    def forward(self, z, y):
+        h = F.relu(self.fc1(torch.cat([z, y], 1)))
+        return {"probs": torch.sigmoid(self.fc2(h))}
+
+
+# classifier p(y|x)
 class Classifier(RelaxedCategorical):
     def __init__(self):
         super(Classifier, self).__init__(var=["y"], cond_var=["x"], name="p")
@@ -106,55 +129,35 @@ class Classifier(RelaxedCategorical):
         h = F.softmax(self.fc2(h), dim=1)
         return {"probs": h}
 
-# prior model p(z|y)
-class Prior(Normal):
-    def __init__(self):
-        super().__init__(var=["z"], cond_var=["y"], name="p_{prior}")
 
-        self.fc11 = nn.Linear(y_dim, z_dim)
-        self.fc12 = nn.Linear(y_dim, z_dim)
-    
-    def forward(self, y):
-        return {"loc": self.fc11(y), "scale": F.softplus(self.fc12(y))}
-   
-# generative model p(x|z)    
-class Generator(Bernoulli):
-    def __init__(self):
-        super().__init__(var=["x"], cond_var=["z"], name="p")
-
-        self.fc1 = nn.Linear(z_dim, 512)
-        self.fc2 = nn.Linear(512, x_dim)
-
-    def forward(self, z):
-        h = F.relu(self.fc1(z))
-        return {"probs": torch.sigmoid(self.fc2(h))}
+# prior model p(z)
+prior = Normal(loc=torch.tensor(0.), scale=torch.tensor(1.),
+               var=["z"], features_shape=[z_dim], name="p_{prior}").to(device)
 
 # distributions for supervised learning
 p = Generator().to(device)
 q = Inference().to(device)
 f = Classifier().to(device)
-prior = Prior().to(device)
 p_joint = p * prior
 
-print(p_joint)
 
 # distributions for unsupervised learning
 _q_u = q.replace_var(x="x_u", y="y_u")
-p_u = p.replace_var(x="x_u")
+p_u = p.replace_var(x="x_u", y="y_u")
 f_u = f.replace_var(x="x_u", y="y_u")
-prior_u = prior.replace_var(y="y_u")
+
 q_u = _q_u * f_u
-p_joint_u = p_u * prior_u
+p_joint_u = p_u * prior
 
 p_joint_u.to(device)
 q_u.to(device)
 f_u.to(device)
 
 print(p_joint_u)
+print_latex(p_joint_u)
 
-elbo = ELBO(p_joint_u, q_u)
-
-elbo_u = ELBO(p_joint, q)
+elbo_u = ELBO(p_joint_u, q_u)
+elbo = ELBO(p_joint, q)
 nll = -f.log_prob() # or -LogProb(f)
 
 rate = 1 * (len(unlabelled) + len(labelled)) / len(labelled)
@@ -204,14 +207,65 @@ def test(epoch):
     print('Test loss: {:.4f}, Test accuracy: {:.4f}'.format(test_loss, test_accuracy))
     return test_loss, test_accuracy
 
+def plot_reconstruction(x, y):
+    with torch.no_grad():
+        z = q.sample({"x":x, "y":y}, return_all=False)
+        z.update({"y":y})
+        recon_batch = p.sample_mean(z).view(-1,1,28,28)
+        recon = torch.cat([x.view(-1,1,28,28), recon_batch]).cpu()
+        return recon
+from matplotlib import pyplot as plt
+
+# borrowed from https://gist.github.com/jakevdp/91077b0cae40f8f8244a
+def discrete_cmap(N, base_cmap=None):
+    """Create an N-bin discrete colormap from the specified input map"""
+
+    # Note that if base_cmap is a string or None, you can simply do
+    #    return plt.cm.get_cmap(base_cmap, N)
+    # The following works for string, None, or a colormap instance:
+
+    base = plt.cm.get_cmap(base_cmap)
+    color_list = base(np.linspace(0, 1, N))
+    cmap_name = base.name + str(N)
+    return base.from_list(cmap_name, color_list, N)
+
+# borrowed from https://github.com/dragen1860/pytorch-mnist-vae/blob/master/plot_utils.py
+def plot_latent(x, y):
+    with torch.no_grad():
+        label = torch.argmax(y, dim = 1).detach().cpu().numpy()
+        z = q.sample_mean({"x":x, "y":y}).detach().cpu().numpy()
+        N = 10
+        fig = plt.figure(figsize=(8, 6))
+        plt.scatter(z[:, 0], z[:, 1], c=label, marker='o', edgecolor='none', cmap=discrete_cmap(N, 'jet'))
+        plt.colorbar(ticks=range(N))
+        plt.grid(True)
+        fig.canvas.draw()
+        image = fig.canvas.renderer._renderer
+        image = np.array(image).transpose(2, 0, 1)
+        image = np.expand_dims(image, 0)
+        return image
+
 import pixyz    
 import datetime
 
 dt_now = datetime.datetime.now()
 exp_time = dt_now.strftime('%Y%m%d_%H:%M:%S')
 v = pixyz.__version__
-nb_name = 'm2'
+nb_name = 'm2_imbalanced_mnist'
 writer = SummaryWriter("runs/" + v + "." + nb_name + exp_time)
+
+_x = []
+_y = []
+for i in range(10):
+    _xx, _yy = iter(validation).next()
+    _x.append(_xx)
+    _y.append(_yy)
+
+_x = torch.cat(_x, dim = 0)
+_y = torch.cat(_y, dim = 0)
+
+_x = _x.to(device)
+_y = torch.eye(10)[_y].to(device)
 
 for epoch in range(1, epochs + 1):
     train_loss = train(epoch)
@@ -220,4 +274,9 @@ for epoch in range(1, epochs + 1):
     writer.add_scalar('test_loss', test_loss.item(), epoch)
     writer.add_scalar('test_accuracy', test_accuracy, epoch)    
     
+    recon = plot_reconstruction(_x[:32], _y[:32])
+    latent = plot_latent(_x, _y)
+    writer.add_images("Image_reconstruction", recon, epoch)
+    writer.add_images("Image_latent", latent, epoch)
+
 writer.close()
