@@ -13,13 +13,14 @@ By using gaussian-mixtured prior, its robustness for imbalanced data is much bet
 - result
 #### Kingma's M2 model
 ![m2_imbalanced_metrics](results/gmvae_imbalanced_mnist/m2_metrics.png)  
-![m2_imbalanced_latent](results/gmvae_imbalanced_mnist/m2_latent.png)  
-![m2_imbalanced_recon](results/gmvae_imbalanced_mnist/m2_recon.png)  
+Latent variables(dimension 0 and 1) and reconstructed images.    
+<img src="results/gmvae_imbalanced_mnist/m2_latent.png" width="200" height="200">
+<img src="results/gmvae_imbalanced_mnist/m2_recon.png" width="200" height="200">  
 
 #### GMVAE
-![gmvae_imbalanced_metrics](results/gmvae_imbalanced_mnist/gmvae_metrics.png)
-![gmvae_imbalanced_latent](results/gmvae_imbalanced_mnist/gmvae_latent.png)  
-Latent variables of each labels are distributed on its own normal distribution   
-![gmvae_imbalanced_recon](results/gmvae_imbalanced_mnist/gmvae_recon.png)  
+![gmvae_imbalanced_metrics](results/gmvae_imbalanced_mnist/gmvae_metrics.png)  
+Latent variables(dimension 0 and 1) and reconstructed images. You can see that each label seems to have its own distribution.  
+<img src="results/gmvae_imbalanced_mnist/gmvae_latent.png" width="200" height="200">   
+<img src="results/gmvae_imbalanced_mnist/gmvae_recon.png" width="200" height="200"> 
 
 
