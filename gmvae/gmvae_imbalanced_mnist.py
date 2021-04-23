@@ -35,11 +35,11 @@ weight = [100,1,1,1,1,10,7,4,5,3]
 labels_per_class = [i * 10 for i in weight]
 n_labels = 10
 
-root = '~/data'
+root = '~/data/'
 transform = transforms.Compose([transforms.ToTensor(),
                                 transforms.Lambda(lambd=lambda x: x.view(-1))])
 
-mnist_train = MNIST(root=root, train=True, download=True, transform=transform)
+mnist_train = MNIST(root=root, download=True, train=True, transform=transform)
 mnist_valid = MNIST(root=root, train=False, transform=transform)
 
 
@@ -115,17 +115,19 @@ class Classifier(RelaxedCategorical):
         return {"probs": h}
 
 # prior model p(z|y)
-class Prior(Normal):
-    def __init__(self):
-        super().__init__(var=["z"], cond_var=["y"], name="p_{prior}")
+# class Prior(Normal):
+#     def __init__(self):
+#         super().__init__(var=["z"], cond_var=["y"], name="p_{prior}")
 
-        self.fc1 = nn.Linear(y_dim, 64)
-        self.fc21 = nn.Linear(64, z_dim)
-        self.fc22 = nn.Linear(64, z_dim)
+#         self.fc1 = nn.Linear(y_dim, 64)
+#         self.fc21 = nn.Linear(64, z_dim)
+#         self.fc22 = nn.Linear(64, z_dim)
     
-    def forward(self, y):
-        h = F.relu(self.fc1(y))
-        return {"loc": self.fc21(h), "scale": F.softplus(self.fc22(h))}
+#     def forward(self, y):
+#         h = F.relu(self.fc1(y))
+#         return {"loc": self.fc21(h), "scale": F.softplus(self.fc22(h))}
+
+
 
 # generative model p(x|z)    
 class Generator(Bernoulli):
@@ -143,7 +145,9 @@ class Generator(Bernoulli):
 p = Generator().to(device)
 q = Inference().to(device)
 f = Classifier().to(device)
-prior = Prior().to(device)
+# prior = Prior().to(device)
+prior = Normal(loc=torch.tensor(0.), scale=torch.tensor(1.),
+               var=["z"], features_shape=[z_dim], name="p_{prior}").to(device)
 p_joint = p * prior
 
 print(p_joint)
@@ -152,7 +156,7 @@ print(p_joint)
 _q_u = q.replace_var(x="x_u", y="y_u")
 p_u = p.replace_var(x="x_u")
 f_u = f.replace_var(x="x_u", y="y_u")
-prior_u = prior.replace_var(y="y_u")
+prior_u = prior#.replace_var(y="y_u")
 q_u = _q_u * f_u
 p_joint_u = p_u * prior_u
 
